@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+<svg width="960" height="960"></svg>
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script>
+  var data = {
+    nodes: {
+      'start': {id: 'start', name: 'スタート'},
+      'hoge': {id: 'hoge', name: 'ほげ'},
+      'fuga': {id: 'fuga', name: 'ふが'},
+      'piyo': {id: 'piyo', name: 'ぴよ'},
+      'hogehoge': {id: 'hogehoge', name: 'ほげほげ'},
+      'piyopiyo': {id: 'piyopiyo', name: 'ぴよぴよ'},
+      'goal': {id: 'goal', name: 'ゴール'}
+    },
+    map: [
+      ['start'],
+      ['hoge', '', 'fuga'],
+      ['piyo', 'piyopiyo'],
+      ['hogehoge'],
+      ['goal']
+    ],
+    links: [
+      {source: 'start', target: 'hoge'},
+      {source: 'hoge', target: 'fuga'},
+      {source: 'hoge', target: 'piyo'},
+      {source: 'piyo', target: 'piyopiyo'},
+      {source: 'piyo', target: 'hogehoge'},
+      {source: 'fuga', target: 'goal'},
+      {source: 'piyopiyo', target: 'hogehoge'},
+      {source: 'hogehoge', target: 'goal'}
+    ]
+  };
+
+  var svg = d3.select("svg");
+  var g = svg.append('g');
+
+  // put nodes
+  var maxXNodesNum = 0;
+  for (var i = 0; i < data.map.length - 1; i++) {
+    maxXNodesNum = Math.max(maxXNodesNum, data.map[i].length);
+  }
+  var widthInterval = svg.attr('width') / maxXNodesNum;
+  var heightInterval = svg.attr('height') / data.map.length;
+
+  for (var i = 0; i < data.map.length; i++) {
+    var tempData = [];
+    for (var j = 0; j < data.map[i].length; j++) {
+      if (data.nodes[data.map[i][j]] !== undefined) {
+        tempData.push(data.nodes[data.map[i][j]]);
+      } else {
+        tempData.push({});
+      }
+    }
+
+    var node = g.selectAll('.node').data(tempData);
+    var enter = node.enter()
+      .append('svg')
+      .attr('id', function (d) {
+        if (d.hasOwnProperty('id')) return 'flowcharts_node_' + d.id;
+      })
+      .style('overflow', 'visible')
+      .attr('x', function (d, i) {
+        return widthInterval / 2 + widthInterval * i;
+      })
+      .attr('y', heightInterval / 2 + heightInterval * i)
+      .attr('width', '100%')
+      .attr('height', '100%')
+      .attr('class', function (d) {
+        if (!d.hasOwnProperty('id')) return '_should_remove';
+      });
+
+    enter.append('circle')
+      .attr("r", 5)
+      .attr('fill', '#fff')
+      .attr('stroke', '#000')
+      .attr('stroke-width', 3);
+
+    enter.append('text')
+      .attr('dx', -10)
+      .attr('dy', -10)
+      .text(function (d) {
+        return d.name;
+      })
+      .attr('text-anchor', 'end');
+  }
+
+  d3.selectAll('._should_remove').remove();
+
+  // draw link
+  var line = d3.line()
+    .curve(d3.curveStepBefore)
+    .x(function(d) {return d.x})
+    .y(function(d) {return d.y});
+
+  g.selectAll('.link')
+    .data(data.links)
+    .enter()
+    .append('path')
+    .style('fill','none')
+    .style('stroke', '#000')
+    .attr('class', 'link')
+    .attr('d', function (d) {
+      var source = d3.select('#flowcharts_node_' + d.source);
+      var target = d3.select('#flowcharts_node_' + d.target);
+      return line([
+        {x: source.attr('x'), y: source.attr('y')},
+        {x: target.attr('x'), y: target.attr('y')}
+      ]);
+    });
+</script>
+<h2>TODO</h2>
+<ul>
+    <li>中間ノードを配置できるようにし、意図したリンクを引けるようにする</li>
+    <li>リンクを矢印にする</li>
+    <li>リンクにラベルを表示する</li>
+</ul>
+</body>
