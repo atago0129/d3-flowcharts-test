@@ -16,19 +16,20 @@
     },
     map: [
       ['start'],
-      ['hoge', '', 'fuga'],
-      ['piyo', 'piyopiyo'],
+      ['hoge'],
+      ['piyo', '', 'fuga'],
+      ['', 'piyopiyo'],
       ['hogehoge'],
       ['goal']
     ],
     links: [
       {source: 'start', target: 'hoge'},
-      {source: 'hoge', target: 'fuga'},
-      {source: 'hoge', target: 'piyo'},
-      {source: 'piyo', target: 'piyopiyo'},
-      {source: 'piyo', target: 'hogehoge'},
-      {source: 'fuga', target: 'goal'},
-      {source: 'piyopiyo', target: 'hogehoge'},
+      {source: 'hoge', target: 'fuga', label: {name: 'no'}},
+      {source: 'hoge', target: 'piyo', label: {name: 'yes'}},
+      {source: 'piyo', target: 'piyopiyo', label: {name: 'yes'}},
+      {source: 'piyo', target: 'hogehoge', label: {name: 'no'}},
+      {source: 'fuga', target: 'goal', type: 'marge'},
+      {source: 'piyopiyo', target: 'hogehoge', type: 'marge'},
       {source: 'hogehoge', target: 'goal'}
     ]
   };
@@ -43,6 +44,32 @@
   }
   var widthInterval = svg.attr('width') / maxXNodesNum;
   var heightInterval = svg.attr('height') / data.map.length;
+
+  var circleStrokeWidth = 2;
+
+  var marker = svg.append("defs").append("marker")
+    .attr('id', 'arrowhead')
+    .attr('refX', 12 + circleStrokeWidth + 2.5)
+    .attr('refY', 6)
+    .attr('markerWidth', 12)
+    .attr('markerHeight', 12)
+    .attr('orient', 'auto');
+
+  var markerForMarge = svg.append("defs").append("marker")
+    .attr('id', 'arrowhead_for_marker')
+    .attr('refX', 12)
+    .attr('refY', 6)
+    .attr('markerWidth', 12)
+    .attr('markerHeight', 12)
+    .attr('orient', 'auto');
+
+  marker.append("path")
+    .attr('d', 'M 0,0 V 12 L12,6 Z')
+    .attr('fill', '#000');
+
+  markerForMarge.append("path")
+    .attr('d', 'M 0,0 V 12 L12,6 Z')
+    .attr('fill', '#000');
 
   for (var i = 0; i < data.map.length; i++) {
     var tempData = [];
@@ -75,7 +102,7 @@
       .attr("r", 5)
       .attr('fill', '#fff')
       .attr('stroke', '#000')
-      .attr('stroke-width', 3);
+      .attr('stroke-width', circleStrokeWidth);
 
     enter.append('text')
       .attr('dx', -10)
@@ -86,34 +113,117 @@
       .attr('text-anchor', 'end');
   }
 
-  d3.selectAll('._should_remove').remove();
-
   // draw link
   var line = d3.line()
+    .x(function(d) {return d.x})
+    .y(function(d) {return d.y});
+  var lineStepBefore = d3.line()
     .curve(d3.curveStepBefore)
     .x(function(d) {return d.x})
     .y(function(d) {return d.y});
+  var lineStepAfter = d3.line()
+    .curve(d3.curveStepAfter)
+    .x(function(d) {return d.x})
+    .y(function(d) {return d.y});
 
-  g.selectAll('.link')
-    .data(data.links)
-    .enter()
-    .append('path')
+  var link = g.selectAll('.link').data(data.links).attr('class', 'link');
+  var linkEnter = link.enter().append('g');
+
+  linkEnter.append('path')
     .style('fill','none')
     .style('stroke', '#000')
-    .attr('class', 'link')
+    .attr('marker-end', function (d) {
+      if (d.type === 'marge') {
+        return 'url(#arrowhead_for_marker)';
+      } else {
+        return 'url(#arrowhead)';
+      }
+    })
     .attr('d', function (d) {
       var source = d3.select('#flowcharts_node_' + d.source);
+      var sourceX = Number(source.attr('x'));
+      var sourceY = Number(source.attr('y'));
       var target = d3.select('#flowcharts_node_' + d.target);
-      return line([
-        {x: source.attr('x'), y: source.attr('y')},
-        {x: target.attr('x'), y: target.attr('y')}
-      ]);
+      var targetX = Number(target.attr('x'));
+      var targetY = Number(target.attr('y'));
+
+      var yMargin = 0;
+      if (d.type === 'marge') {
+        yMargin = 40;
+      }
+
+      if (sourceX === targetX || sourceY === targetY) {
+        return line([
+          {x: sourceX, y: sourceY},
+          {x: targetX, y: targetY - yMargin}
+        ]);
+      } else if (sourceX > targetX) {
+        return lineStepBefore([
+          {x: sourceX, y: sourceY},
+          {x: targetX, y: targetY - yMargin}
+        ]);
+      } else {
+        return lineStepAfter([
+          {x: sourceX, y: sourceY},
+          {x: targetX, y: targetY - yMargin}
+        ]);
+      }
+
+    })
+    .attr('stroke-dasharray', function (d) {
+      if (d.type === 'marge') {
+        return '0 4.5 ' + this.getTotalLength();
+      } else {
+        return '0 4.5 ' + (this.getTotalLength() - (5 + 12 + circleStrokeWidth));
+      }
+    })
+    .attr('stroke-dashoffset', 0);
+
+  linkEnter.append('text')
+    .attr('class', function (d) {
+      if (d.hasOwnProperty('label')) {
+        return 'linkLabel';
+      } else {
+        return '_should_remove';
+      }
+    })
+    .text(function (d) {
+      if (!d.hasOwnProperty('label')) return;
+      return d.label.name;
+    })
+    .attr('x', function (d) {
+      var source = d3.select('#flowcharts_node_' + d.source);
+      var target = d3.select('#flowcharts_node_' + d.target);
+      if (source.attr('x') === target.attr('x')) {
+        return Number(source.attr('x')) - 2.5 - circleStrokeWidth - 3;
+      } else {
+        return Number(source.attr('x')) + 5 + circleStrokeWidth + 15;
+      }
+    })
+    .attr('y', function (d) {
+      var source = d3.select('#flowcharts_node_' + d.source);
+      var target = d3.select('#flowcharts_node_' + d.target);
+      if (source.attr('x') === target.attr('x')) {
+        return Number(source.attr('y')) + 5 + circleStrokeWidth + 20; // 20 is margin
+      } else {
+        return Number(source.attr('y')) - 5 - circleStrokeWidth;
+      }
+    })
+    .attr('text-anchor', function (d) {
+      var source = d3.select('#flowcharts_node_' + d.source);
+      var target = d3.select('#flowcharts_node_' + d.target);
+      if (source.attr('x') === target.attr('x')) {
+        return 'end';
+      } else {
+        return 'start';
+      }
     });
+
+
+  d3.selectAll('._should_remove').remove();
 </script>
 <h2>TODO</h2>
 <ul>
-    <li>中間ノードを配置できるようにし、意図したリンクを引けるようにする</li>
-    <li>リンクを矢印にする</li>
-    <li>リンクにラベルを表示する</li>
+    <li>リファクタリングして ES6 化</li>
 </ul>
 </body>
